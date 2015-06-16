@@ -1,24 +1,43 @@
 window.KBarcode=function(img, callback) {
 	this.quietSize=7;
-	this.imageEl=img;
-	this.width=img.naturalWidth;
-	this.height=img.naturalHeight;
+	var imgType=(img.nodeName && img.nodeName=='IMG')?'img':'array';
+	if (img.nodeName && img.nodeName=='IMG') {
+		this.width=img.naturalWidth;
+		this.height=img.naturalHeight;
+		this.canvas=document.createElement('canvas');
+		this.canvas.width=this.width;
+		this.canvas.height=this.quietSize;
+		this.ctx=this.canvas.getContext('2d');
+	}
+	else {
+		this.width=img.length;
+		this.height=1;
+	}
 	this.center=parseInt(this.width/2);
-	this.canvas=document.createElement('canvas');
-	this.canvas.width=this.width;
-	this.canvas.height=this.quietSize;
 	this.avgGray=0;
-	this.ctx=this.canvas.getContext('2d');
+	this.black=0;this.width=255;
 	this.pixels=new Uint8ClampedArray(this.width);
 	this.getBit=function(plStart, pbitsize, log) {
-		var sum=0, lStart=Math.ceil(plStart), bitsize=Math.floor(pbitsize);
+		var sum=0, lStart=Math.floor(plStart), bitsize=Math.ceil(pbitsize);
 		for (var j=lStart;j<bitsize+lStart;++j) {
 			sum+=this.pixels[j];
 		}
 		if (log) {
 			console.log('checking bit', lStart, bitsize, this.avgGray, sum/bitsize);
 		}
-		return (sum/bitsize)<this.avgGray?1:0;
+		var avg=sum/bitsize;
+		if (avg<this.black) { // definitely black (high bit)
+			return 1;
+		}
+		if (avg>this.white) { // definitely white (low bit)
+			return 0;
+		}
+		// indeterminate... check center bit
+		var cpx=parseInt(plStart+pbitsize/2);
+		if (this.pixels[cpx]<avg) { // center pixel is darker than surrounding pixels (high)
+			return 1;
+		}
+		return 0;
 	}
 	this.getBytes=function(lpos, bitsize) {
 		var bytes=[];
@@ -42,21 +61,34 @@ window.KBarcode=function(img, callback) {
 		var result={
 			'success':0
 		};
-		this.ctx.drawImage(img, 0, -parseInt(this.height/2));
-		var imageData=this.ctx.getImageData(0, 0, this.width, 1).data, i;
-		document.body.appendChild(this.canvas);
-		var sum=0;
-		for (i=0;i<this.width;++i) {
-			this.pixels[i]=parseInt((imageData[i*4]*0.21+imageData[i*4+1]*0.72+imageData[i*4+2]*0.07));
-			sum+=this.pixels[i];
+		if (imgType=='img') {
+			this.ctx.drawImage(img, 0, -parseInt(this.height/2));
+			var imageData=this.ctx.getImageData(0, 0, this.width, 1).data, i;
+			var sum=0;
+			for (i=0;i<this.width;++i) {
+				this.pixels[i]=parseInt((imageData[i*4]*0.21+imageData[i*4+1]*0.72+imageData[i*4+2]*0.07));
+				sum+=this.pixels[i];
+			}
+			this.avgGray=sum/this.width;
+			this.black=this.avgGray/2;
+			this.white=255-(255-this.avgGray)/2;
 		}
-		this.avgGray=sum/this.width;
+		else {
+			var sum=0;
+			for (i=0;i<this.width;++i) {
+				this.pixels[i]=img[i];
+				sum+=this.pixels[i];
+			}
+			this.avgGray=sum/this.width;
+		}
 		// barcode is a "quiet" area of this.quietSize low bits, 3+7*6+5+7*6+3 (95) bits of encoding, followed by this.quietSize low bits. 109 total.
 		// we start by first finding a "quiet" area on the left.
 		// we cannot be certain of the "bit size" of the barcode, so we start with bit-size 1.
 		// {
 		var maxbitsize=Math.ceil(this.width/109); // bitsize can't be higher or the barcode is larger than the image.
 		for (var bitsize=1;bitsize<maxbitsize;++bitsize) {
+			result.bitsize=bitsize;
+			result.quietSize=this.quietSize;
 			// starting from the center of the image, check left until we find this.quietSize repeated "low" bits (the "quiet area")
 			for (var lStart=this.center;lStart>=0;--lStart) {
 				// at each start position, check this.quietSize bits and see if they are all low
@@ -77,8 +109,8 @@ window.KBarcode=function(img, callback) {
 				// next we need to check on the right size of the barcode to find a quiet area there.
 				// if there, it starts somewhere between lStart+(bitsize*103) and lStart+((bitsize+1)*103)-1 inclusive.
 				// this accounts for bits that are "between" pixel sizes, as the barcode is not strictly pixelated in the image.
-				var minRStart=lStart+(bitsize*95+this.quietSize);
-				var maxRStart=lStart+((bitsize+1)*95+this.quietSize);
+				var minRStart=lStart+(bitsize*(95+this.quietSize));
+				var maxRStart=lStart+((bitsize+1)*(95+this.quietSize));
 				for (var rStart=minRStart;rStart<maxRStart;++rStart) {
 					// at each rStart position, check this.quietSize bits and see if they are all low
 					allLow=1;
@@ -103,21 +135,23 @@ window.KBarcode=function(img, callback) {
 					if (!this.getBit(bcStart, bcBitSize) || this.getBit(bcStart+bcBitSize, bcBitSize) || !this.getBit(bcStart+bcBitSize*2, bcBitSize)) {
 						break;
 					}
-					// }
+					result.leftMarker=[bcStart, bcStart+bcBitSize, bcStart+bcBitSize*2];
 					result.level=3;
-					// { check middle marker
-					var mStart=bcStart+bcWidth/2-bcBitSize*2.5;
-					if (this.getBit(mStart, bcBitSize) || !this.getBit(mStart+bcBitSize, bcBitSize) || this.getBit(mStart+bcBitSize*2, bcBitSize) || !this.getBit(mStart+bcBitSize*3, bcBitSize) || this.getBit(mStart+bcBitSize*4, bcBitSize)) {
-						break;
-					}
 					// }
-					result.level=4;
 					// { check right marker
 					var mStart2=bcStart+bcWidth-bcBitSize*3;
+					result.rightMarker=[mStart2, mStart2+bcBitSize, mStart2+bcBitSize*2];;
 					if (!this.getBit(mStart2, bcBitSize)
 						|| this.getBit(mStart2+bcBitSize, bcBitSize)
 						|| !this.getBit(mStart2+bcBitSize*2, bcBitSize)
 					) {
+						break;
+					}
+					result.level=4;
+					// }
+					// { check middle marker
+					var mStart=bcStart+bcWidth/2-bcBitSize*2.5;
+					if (this.getBit(mStart, bcBitSize) || !this.getBit(mStart+bcBitSize, bcBitSize) || this.getBit(mStart+bcBitSize*2, bcBitSize) || !this.getBit(mStart+bcBitSize*3, bcBitSize) || this.getBit(mStart+bcBitSize*4, bcBitSize)) {
 						break;
 					}
 					// }

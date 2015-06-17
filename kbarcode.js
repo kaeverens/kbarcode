@@ -32,23 +32,6 @@ window.KBarcode=function(img, callback, addToBody) {
 		}
 		return bit;
 	}
-	this.getBytes=function(lpos, bitsize, log) {
-		var bytes=[];
-		for (var i=0;i<6;++i) {
-			bytes.push(this.getByte(lpos+bitsize*7*i, bitsize, log));
-		}
-		return bytes;
-	}
-	this.getByte=function(lpos, bitsize, log) {
-		if (log) {
-			console.log('retrieving byte from '+lpos+' of bit size '+bitsize);
-		}
-		var b='';
-		for (var i=0;i<7;++i) {
-			b+=this.getBit(lpos+bitsize*i, bitsize, log)?'1':'0';
-		}
-		return b;
-	}
 	this.check=function() {
 		var i;
 		var result={
@@ -158,13 +141,15 @@ window.KBarcode=function(img, callback, addToBody) {
 					// }
 					// awesome! this is looking good. now we can extract the 7-bit bytes inside the barcode.
 					// now that we know the exact size of the barcode in the image, we can rescale it down to 95 pixels to make bit extraction easier
-					var nextBitSize=Math.ceil(bcBitSize), multiplier=nextBitSize/bcBitSize;
+					var nextBitSize=Math.ceil(bcBitSize)*2, multiplier=nextBitSize/bcBitSize;
 					var arr=[], min=255, max=0, pixel;
 					for (var i=0;i<bcWidth;i++) {
 						pixel=this.pixels[bcStart+i];
-						var idx1=Math.ceil(i*multiplier), idx2=idx1+1;
-						arr[idx1]=arr[idx1]===undefined?pixel:(arr[idx1]+pixel)/2;
-						arr[idx2]=arr[idx2]===undefined?pixel:(arr[idx2]+pixel)/2;
+						var idx1=Math.ceil(i*multiplier), idx2=idx1+1, idx3=idx2+1, idx4=idx3+1;
+						arr[idx1]=pixel;
+						arr[idx2]=pixel;
+						arr[idx3]=pixel;
+						arr[idx4]=pixel;
 						if (pixel<min) {
 							min=pixel;
 						}

@@ -60,6 +60,7 @@ window.KBarcode=function(img, callback, addToBody) {
 		// we cannot be certain of the "bit size" of the barcode, so we start with bit-size 1.
 		// {
 		var maxbitsize=Math.ceil(this.width/109); // bitsize can't be higher or the barcode is larger than the image.
+		result.pixels=this.pixels;
 		for (var bitsize=1;bitsize<maxbitsize;++bitsize) {
 			result.bitsize=bitsize;
 			result.quietSize=this.quietSize;
@@ -130,6 +131,7 @@ window.KBarcode=function(img, callback, addToBody) {
 					result.rightMarker=[mStart2, mStart2+bcBitSize, mStart2+bcBitSize*2];;
 					result.level=4;
 					// }
+					return callback(result);
 					// { check middle marker
 					var mStart=Math.ceil(bcStart+bcWidth/2-bcBitSize*2.5);
 					if (this.getBit(mStart, bcBitSize) || !this.getBit(mStart+bcBitSize, bcBitSize) || this.getBit(mStart+bcBitSize*2, bcBitSize) || !this.getBit(mStart+bcBitSize*3, bcBitSize) || this.getBit(mStart+bcBitSize*4, bcBitSize)) {
@@ -139,6 +141,7 @@ window.KBarcode=function(img, callback, addToBody) {
 					result.middleMarker=[mStart, mStart+bcBitSize, mStart+bcBitSize*2, mStart+bcBitSize*3, mStart+bcBitSize*4];
 					result.level=5;
 					// }
+					return callback(result);
 					// awesome! this is looking good. now we can extract the 7-bit bytes inside the barcode.
 					// now that we know the exact size of the barcode in the image, we can rescale it down to 95 pixels to make bit extraction easier
 					var nextBitSize=Math.ceil(bcBitSize)*2, multiplier=nextBitSize/bcBitSize;
@@ -206,7 +209,6 @@ window.KBarcode=function(img, callback, addToBody) {
 			}
 		}
 		// }
-		result.pixels=this.pixels;
 		return callback(result);
 	}
 	return this;

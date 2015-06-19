@@ -15,41 +15,57 @@ self.addEventListener('message', function(e) {
 		var rMax=this_pixels.length, avg;
 		if (bitsize==1) {
 			avg=this_pixels[blStart];
-			pixels=[avg];
+			pixels=avg;
 		}
 		else {
-			sum=
-				(this_pixels[blStart]<this_avgGray?0:127)
-				+(this_pixels[blStart+bitsize-1]<this_avgGray?0:127);
+			sum=(this_pixels[blStart]+this_pixels[blStart+bitsize-1])/2;
 			pixels.push([this_pixels[blStart], blStart+bitsize<rMax?this_pixels[blStart+bitsize-1]:0]);
 			for (var j=blStart+1;j<bitsize+blStart-1;++j) {
-				sum+=j<rMax?(this_pixels[j]<this_avgGray?0:255):0;
+				sum+=j<rMax?this_pixels[j]:0;
 				pixels.push(j<rMax?this_pixels[j]:0);
 			}
 			var avg=sum/(bitsize-1);
 		}
-		var bit=avg<(this_avgGray)?1:0;
+		var bit=avg<this_avgGray?1:0;
 		if (log) {
 			console.log('checking bit at point '+blStart,
 				'bitsize '+bitsize,
 				'gray is '+this_avgGray,
 				'sum is '+sum,
-				' avg is '+(avg),
-				'result is '+bit,
-				'this_avgGray is '+this_avgGray
+				'avg is '+avg,
+				'bit is '+bit
 			);
-			console.log(plStart, pixels);
+			console.log(blStart, pixels);
 		}
 		return bit;
 	};
 	var result={
 		'success':0
 	};
-	sum=0;
-	for (i=0;i<this_width;++i) {
-		sum+=this_pixels[i];
+	function calibrateGray(lBound, rBound) {
+		var sum=0;
+		for (var i=lBound; i<rBound; ++i) {
+			sum+=this_pixels[i];
+		}
+		this_avgGray=sum/(rBound-lBound);
 	}
-	this_avgGray=sum/this_width;
+	function getBytes(lBound, rBound, log) {
+		lBound=Math.floor(lBound);
+		rBound=Math.ceil(rBound);
+		var width=rBound-lBound+1, byteWidth=width/6, bitWidth=width/42;
+		// first, find a better average gray value for this section
+		calibrateGray(lBound, rBound);
+		var bytes=[];
+		for (var i=0;i<6;++i) {
+			var b='';
+			for (var j=0;j<7;++j) {
+				b+=this_getBit(Math.floor(lBound+byteWidth*i+bitWidth*j), bitWidth, log);
+			}
+			bytes.push(b);
+		}
+		return bytes;
+	}
+	calibrateGray(0, this_width);
 	// barcode is a "quiet" area of this_quietSize low bits, 3+7*6+5+7*6+3 (95) bits of encoding, followed by this_quietSize low bits. 109 total.
 	// we start by first finding a "quiet" area on the left.
 	// we cannot be certain of the "bit size" of the barcode, so we start with bit-size 1.
@@ -61,6 +77,7 @@ self.addEventListener('message', function(e) {
 		result.quietSize=this_quietSize;
 		// starting from the center of the image, check left until we find this_quietSize repeated "low" bits (the "quiet area")
 		for (var lStart=this_center;lStart>=0;--lStart) {
+			calibrateGray(lStart, lStart+95);
 			// at each start position, check this_quietSize bits and see if they are all low
 			var allLow=1;
 			for (i=lStart;i<this_quietSize*bitsize+lStart;++i) {
@@ -84,14 +101,19 @@ self.addEventListener('message', function(e) {
 			if (maxRStart+this_quietSize*bitsize>this_pixels.length) {
 				maxRStart=this_pixels.length-this_quietSize*bitsize;
 			}
-			var bcStart=lStart+bitsize*this_quietSize;
+			while (this_pixels[i]>this_avgGray && i<this_center) { // make sure we start the barcode proper on a high bit.
+				i++;
+			}
+			var bcStart=i;
+			result.bcStart=bcStart;
 			for (var rStart=minRStart;rStart<maxRStart;++rStart) {
+				calibrateGray(lStart, lStart+95);
 				// set the boundaries of the expected barcode
 				var bcWidth=rStart-bcStart, bcBitSize=bcWidth/95;
 				// at each rStart position, check this_quietSize bits and see if they are all low
 				allLow=1;
 				for (i=rStart;i<this_quietSize*bcBitSize+rStart;++i) {
-					if (this_pixels[i]<this_avgGray+20) {
+					if (this_pixels[i]<this_avgGray) {
 						allLow=0;
 						break;
 					}
@@ -103,32 +125,36 @@ self.addEventListener('message', function(e) {
 				result.right=rStart;
 				result.level=2;
 				result.gray=this_avgGray;
-				result.bcStart=bcStart;
 				result.bcWidth=bcWidth;
 				result.bitsize=bcBitSize;
 				// { otherwise, we have found a quiet area where expected and can start checking the code itself. exciting!
 				// and now we can check for the "markers"
 				// if anything at all is wrong from this point forward, then we don't bother checking again at this bit size
+				// first, recalibrate the average gray value
+				calibrateGray(bcStart, rStart);
 				// { check for start marker
-				if (!this_getBit(bcStart, bcBitSize) || this_getBit(bcStart+bcBitSize, bcBitSize) || !this_getBit(bcStart+bcBitSize*2, bcBitSize)) {
+				if (!this_getBit(bcStart, bcBitSize) ||
+					this_getBit(bcStart+bcBitSize, bcBitSize) ||
+					!this_getBit(bcStart+bcBitSize*2, bcBitSize)
+				) {
 					break;
 				}
 				result.leftMarker=[bcStart, bcStart+bcBitSize, bcStart+bcBitSize*2];
 				result.level=3;
 				// }
 				// { check right marker
-				var mStart2=Math.ceil(bcStart+bcWidth-bcBitSize*3);
-				if (!this_getBit(mStart2, bcBitSize) ||
-					this_getBit(mStart2+bcBitSize, bcBitSize) ||
-					!this_getBit(mStart2+bcBitSize*2, bcBitSize)
+				var rGuardStart=parseInt(rStart-bcBitSize*3);
+				if (!this_getBit(rGuardStart, bcBitSize) ||
+					this_getBit(rGuardStart+bcBitSize, bcBitSize) ||
+					!this_getBit(rGuardStart+bcBitSize*2, bcBitSize)
 				) {
 					break;
 				}
-				result.rightMarker=[mStart2, mStart2+bcBitSize, mStart2+bcBitSize*2];
+				result.rightMarker=[rGuardStart, rGuardStart+bcBitSize, rGuardStart+bcBitSize*2];
 				result.level=4;
 				// }
 				// { check middle marker
-				var mStart=bcStart+bcWidth/2-bcBitSize*2.5;
+				var mStart=parseInt(bcStart+bcWidth/2-bcBitSize*2.5);
 				if (this_getBit(mStart, bcBitSize) ||
 					!this_getBit(mStart+bcBitSize, bcBitSize) ||
 					this_getBit(mStart+bcBitSize*2, bcBitSize) ||
@@ -141,30 +167,26 @@ self.addEventListener('message', function(e) {
 				result.level=5;
 				// }
 				// awesome! this is looking good. now we can extract the 7-bit bytes inside the barcode.
-				// first, find a better this_avgGray
-				sum=0;
-				for (i=lStart; i<rStart; ++i) {
-					sum+=this_pixels[i];
+				// adjust the guard boundaries so they're right at their edges
+				while (this_pixels[rGuardStart-1]<this_avgGray) {
+					rGuardStart--;
 				}
-				this_avgGray=sum/(rStart-lStart);
-				result.avgGray=this_avgGray;
-				// now get the 7-bit bytes from left and right
-				var lbytes=[], b;
-				for (i=0;i<6;++i) {
-					b='';
-					for (j=0;j<7;++j) {
-						b+=this_getBit(lStart+bcBitSize*(i*7+j+this_quietSize+2), bcBitSize);
-					}
-					lbytes.push(b);
+				// both sides can be done the same way, so do it in a function
+				result.lBytesLBound=parseInt(bcStart+3*bcBitSize);
+				while (this_pixels[result.lBytesLBound]<this_avgGray) {
+					result.lBytesLBound++;
 				}
-				var rbytes=[];
-				for (i=0;i<6;++i) {
-					b='';
-					for (j=0;j<7;++j) {
-						b+=this_getBit(lStart+bcBitSize*(i*7+j+this_quietSize+49), bcBitSize);
-					}
-					rbytes.push(b);
+				result.lBytesRBound=mStart-1;
+				result.rBytesLBound=mStart+5*bcBitSize;
+				while (this_pixels[result.rBytesLBound-1]<this_avgGray) {
+					result.rBytesLBound--;
 				}
+				result.rBytesRBound=rGuardStart-1;
+				while (this_pixels[result.rBytesRBound]<this_avgGray) {
+					result.rBytesRBound--;
+				}
+				var lbytes=getBytes(result.lBytesLBound, result.lBytesRBound),
+					rbytes=getBytes(result.rBytesLBound, result.rBytesRBound);
 				result.level=6;
 				result.lbytes=lbytes;
 				result.rbytes=rbytes;
@@ -212,6 +234,7 @@ self.addEventListener('message', function(e) {
 					}
 				}
 				var parityNumber=parityValues[parityPattern];
+//				return self.postMessage(result);
 				if (parityNumber===undefined) { // failed to find a number encoded in the parity bits
 					continue;
 				}

@@ -28,7 +28,14 @@ self.addEventListener('message', function(e) {
 		}
 		var bit=avg<(this_avgGray)?1:0;
 		if (log) {
-			console.log('checking bit at point '+blStart+', bitsize '+bitsize, 'gray is '+this_avgGray, 'sum is '+sum, ' avg is '+(avg), 'result is '+bit);
+			console.log('checking bit at point '+blStart,
+				'bitsize '+bitsize,
+				'gray is '+this_avgGray,
+				'sum is '+sum,
+				' avg is '+(avg),
+				'result is '+bit,
+				'this_avgGray is '+this_avgGray
+			);
 			console.log(plStart, pixels);
 		}
 		return bit;
@@ -117,11 +124,11 @@ self.addEventListener('message', function(e) {
 				// }
 				// { check middle marker
 				var mStart=bcStart+bcWidth/2-bcBitSize*2.5;
-				if (!this_getBit(mStart, bcBitSize, 1) ||
-					this_getBit(mStart+bcBitSize, bcBitSize, 1) ||
-					!this_getBit(mStart+bcBitSize*2, bcBitSize, 1) ||
-					this_getBit(mStart+bcBitSize*3, bcBitSize, 1) ||
-					!this_getBit(mStart+bcBitSize*4, bcBitSize, 1)
+				if (this_getBit(mStart, bcBitSize) ||
+					!this_getBit(mStart+bcBitSize, bcBitSize) ||
+					this_getBit(mStart+bcBitSize*2, bcBitSize) ||
+					!this_getBit(mStart+bcBitSize*3, bcBitSize) ||
+					this_getBit(mStart+bcBitSize*4, bcBitSize)
 				) {
 					break;
 				}
@@ -141,7 +148,7 @@ self.addEventListener('message', function(e) {
 				for (i=0;i<6;++i) {
 					b='';
 					for (j=0;j<7;++j) {
-						b+=this_getBit(lStart+bcBitSize*(i*7+j+this_quietSize+3), bcBitSize);
+						b+=this_getBit(lStart+bcBitSize*(i*7+j+this_quietSize+2), bcBitSize);
 					}
 					lbytes.push(b);
 				}
@@ -149,7 +156,7 @@ self.addEventListener('message', function(e) {
 				for (i=0;i<6;++i) {
 					b='';
 					for (j=0;j<7;++j) {
-						b+=this_getBit(lStart+bcBitSize*(i*7+j+50+this_quietSize), bcBitSize);
+						b+=this_getBit(lStart+bcBitSize*(i*7+j+this_quietSize+49), bcBitSize);
 					}
 					rbytes.push(b);
 				}

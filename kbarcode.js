@@ -18,7 +18,9 @@ self.addEventListener('message', function(e) {
 			pixels=[avg];
 		}
 		else {
-			sum=(this_pixels[blStart]+this_pixels[blStart+bitsize-1])/2<this_avgGray?0:255;
+			sum=
+				(this_pixels[blStart]<this_avgGray?0:127)
+				+(this_pixels[blStart+bitsize-1]<this_avgGray?0:127);
 			pixels.push([this_pixels[blStart], blStart+bitsize<rMax?this_pixels[blStart+bitsize-1]:0]);
 			for (var j=blStart+1;j<bitsize+blStart-1;++j) {
 				sum+=j<rMax?(this_pixels[j]<this_avgGray?0:255):0;
@@ -62,7 +64,7 @@ self.addEventListener('message', function(e) {
 			// at each start position, check this_quietSize bits and see if they are all low
 			var allLow=1;
 			for (i=lStart;i<this_quietSize*bitsize+lStart;++i) {
-				if (this_pixels[i]<this_avgGray) {
+				if (this_pixels[i]<this_avgGray+20) {
 					allLow=0;
 					break;
 				}
@@ -89,7 +91,7 @@ self.addEventListener('message', function(e) {
 				// at each rStart position, check this_quietSize bits and see if they are all low
 				allLow=1;
 				for (i=rStart;i<this_quietSize*bcBitSize+rStart;++i) {
-					if (this_pixels[i]<this_avgGray) {
+					if (this_pixels[i]<this_avgGray+20) {
 						allLow=0;
 						break;
 					}
@@ -116,7 +118,10 @@ self.addEventListener('message', function(e) {
 				// }
 				// { check right marker
 				var mStart2=Math.ceil(bcStart+bcWidth-bcBitSize*3);
-				if (!this_getBit(mStart2, bcBitSize) || this_getBit(mStart2+bcBitSize, bcBitSize) || !this_getBit(mStart2+bcBitSize*2, bcBitSize)) {
+				if (!this_getBit(mStart2, bcBitSize) ||
+					this_getBit(mStart2+bcBitSize, bcBitSize) ||
+					!this_getBit(mStart2+bcBitSize*2, bcBitSize)
+				) {
 					break;
 				}
 				result.rightMarker=[mStart2, mStart2+bcBitSize, mStart2+bcBitSize*2];

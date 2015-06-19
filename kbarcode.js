@@ -164,6 +164,8 @@ self.addEventListener('message', function(e) {
 				result.level=6;
 				result.lbytes=lbytes;
 				result.rbytes=rbytes;
+
+				result.success=1;
 				return self.postMessage(result);
 				// }
 				// after finding a right quiet area, there's no point looking any further right
@@ -173,7 +175,5 @@ self.addEventListener('message', function(e) {
 		}
 	}
 	// }
-	console.log('failed to find barcode');
-	console.log(result);
 	self.postMessage(result);
 });

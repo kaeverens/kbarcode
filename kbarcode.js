@@ -10,7 +10,7 @@ self.addEventListener('message', function(e) {
 	this_width=this_pixels.length;
 	this_center=parseInt(this_width/2);
 	this_getBit=function(plStart, pbitsize, log) {
-		var sum=0, blStart=Math.ceil(plStart), bitsize=Math.floor(pbitsize)||1;
+		var sum=0, blStart=parseInt(plStart), bitsize=parseInt(pbitsize)||1;
 		var pixels=[];
 		var rMax=this_pixels.length, avg;
 		if (bitsize==1) {
@@ -60,14 +60,6 @@ self.addEventListener('message', function(e) {
 					break;
 				}
 			}
-//			if (allLow) {
-//				for (i=0;i<this_quietSize;++i) {
-//					if (this_getBit(lStart+i*bitsize, bitsize)) {
-//						allLow=0;
-//						break; // no point continuing this loop - it's not a quiet area
-//					}
-//				}
-//			}
 			// if this start position does not have this_quietSize low bits, then continue on to the next start position
 			if (!allLow) {
 				continue;
@@ -124,12 +116,12 @@ self.addEventListener('message', function(e) {
 				result.level=4;
 				// }
 				// { check middle marker
-				var mStart=Math.ceil(bcStart+bcWidth/2-bcBitSize*2.5);
-				if (!this_getBit(mStart, bcBitSize) ||
-					this_getBit(mStart+bcBitSize, bcBitSize) ||
-					!this_getBit(mStart+bcBitSize*2, bcBitSize) ||
-					this_getBit(mStart+bcBitSize*3, bcBitSize) ||
-					!this_getBit(mStart+bcBitSize*4, bcBitSize)
+				var mStart=bcStart+bcWidth/2-bcBitSize*2.5;
+				if (!this_getBit(mStart, bcBitSize, 1) ||
+					this_getBit(mStart+bcBitSize, bcBitSize, 1) ||
+					!this_getBit(mStart+bcBitSize*2, bcBitSize, 1) ||
+					this_getBit(mStart+bcBitSize*3, bcBitSize, 1) ||
+					!this_getBit(mStart+bcBitSize*4, bcBitSize, 1)
 				) {
 					break;
 				}

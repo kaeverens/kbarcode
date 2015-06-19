@@ -143,7 +143,7 @@ self.addEventListener('message', function(e) {
 				}
 				this_avgGray=sum/(rStart-lStart);
 				result.avgGray=this_avgGray;
-				// there are two groups of 6 bytes each
+				// now get the 7-bit bytes from left and right
 				var lbytes=[], b;
 				for (i=0;i<6;++i) {
 					b='';
@@ -163,12 +163,87 @@ self.addEventListener('message', function(e) {
 				result.level=6;
 				result.lbytes=lbytes;
 				result.rbytes=rbytes;
+				// decode the bytes into digits
+				var digitSets=[
+					['0001101', '0100111', '1110010'],
+					['0011001', '0110011', '1100110'],
+					['0010011', '0011011', '1101100'],
+					['0111101', '0100001', '1000010'],
+					['0100011', '0011101', '1011100'],
+					['0110001', '0111001', '1001110'],
+					['0101111', '0000101', '1010000'],
+					['0111011', '0010001', '1000100'],
+					['0110111', '0001001', '1001000'],
+					['0001011', '0010111', '1110100']
+				];
+				var parityValues={
+					'AAAAAA': 0,
+					'AABABB': 1,
+					'AABBAB': 2,
+					'AABBBA': 3,
+					'ABAABB': 4,
+					'ABBAAB': 5,
+					'ABBBAA': 6,
+					'ABABAB': 7,
+					'ABABBA': 8,
+					'ABBABA': 9
+				};
+				var digits=[], ok=1, parityPattern='';
+				for (i=0;i<6;++i) { // check left side digits first
+					for (j=0;j<10;++j) {
+						if (digitSets[j][0]==lbytes[i]) {
+							digits[i]=j;
+							parityPattern+='A';
+							break;
+						}
+						if (digitSets[j][1]==lbytes[i]) {
+							digits[i]=j;
+							parityPattern+='B';
+							break;
+						}
+					}
+					if (j==10) { // failed to identify a digit!
+						ok=0;
+					}
+				}
+				var parityNumber=parityValues[parityPattern];
+				if (parityNumber===undefined) { // failed to find a number encoded in the parity bits
+					continue;
+				}
+				for (i=0;i<6;++i) { // check right side digits first
+					for (j=0;j<10;++j) {
+						if (digitSets[j][2]==rbytes[i]) {
+							digits[i+6]=j;
+							break;
+						}
+					}
+					if (j==10) { // failed to identify a digit!
+						ok=0;
+					}
+				}
+				if (!ok) {
+					break;
+				}
+				digits.unshift(parityNumber);
+				// check to see if the checksum works against the digits
+				var odd=0, even=0;
+				for (i=12; i; i-=2) {
+					odd+=digits[i];
+				}
+				for (i=11; i>0; i-=2) {
+					even+=digits[i];
+				}
+				sum=odd+even*3;
+				sum=10-(sum%10);
+				if (digits[0]!=sum) { // checksum failed
+					break;
+				}
 
+				result.digits=digits;
 				result.success=1;
+				result.value=result.digits.join('');
 				return self.postMessage(result);
 				// }
-				// after finding a right quiet area, there's no point looking any further right
-				break;
 			}
 			// }
 		}

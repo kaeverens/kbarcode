@@ -13,7 +13,7 @@ $(function() {
 				result=result.data;
 				console.log(result);
 				if (result.value) {
-					alert(value);
+					alert(result.value);
 				}
 				if (result.left) {
 					$('<div class="marker" style="left:'+result.left+'px;width:'+(result.bitsize*result.quietSize)+'px"/>').appendTo($preview);

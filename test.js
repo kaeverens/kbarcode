@@ -14,9 +14,6 @@ $(function() {
 			function resultCallback(result) {
 				result=result.data;
 				console.log(result);
-				if (result.value) {
-					alert(result.value);
-				}
 				if (result.left) {
 					$('<div class="marker" style="left:'+result.left+'px;width:'+(result.bitsize*result.quietSize)+'px"/>').appendTo($preview);
 				}
@@ -58,6 +55,10 @@ $(function() {
 						}
 					}
 				}
+				if (result.value) {
+					alert(result.value);
+					setTimeout(next, 1);
+				}
 			}
 			kbarcode.addEventListener('message', resultCallback);
 			for (var i=0;i<imgs[cur].length;++i) {
@@ -69,7 +70,6 @@ $(function() {
 				'cmd':'decode',
 				'msg':imgs[cur]
 			});
-			return;
 		}
 		next();
 	}).click();

@@ -164,6 +164,7 @@ self.addEventListener('message', function(e) {
 					while (this_pixels[result.rBytesRBound]<this_avgGray) {
 						result.rBytesRBound--;
 					}
+					calibrateGray(result.lBytesLBound, result.rBytesRBound);
 					result.numbits=14*(2*3+3); // num digits (14) multiplied by (num wide bits (2) by width (2.5) plus num narrow bits)
 					var bits=[], tbitsize=(result.rBytesRBound-result.lBytesLBound)/result.numbits;
 					result.bitsize=tbitsize;
@@ -180,6 +181,7 @@ self.addEventListener('message', function(e) {
 							lengths[lengthsAt]++;
 						}
 					}
+					console.log(lengthsAt, lengths);
 					if (lengthsAt!=59) { // should be (12 digits * 5 bits -1 offset = 59)
 						continue;
 					}

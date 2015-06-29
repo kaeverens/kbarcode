@@ -2,7 +2,7 @@ self.addEventListener('message', function(e) {
 	if (!e.data.cmd || e.data.cmd!='decode') {
 		return;
 	}
-	var j, i, sum;
+	var j, i, sum, ok;
 	this_quietSize=6;
 	this_height=1;
 	this_avgGray=0;
@@ -228,7 +228,7 @@ self.addEventListener('message', function(e) {
 						'10010':8,
 						'01010':9
 					};
-					var ok=true;
+					ok=true;
 					for (var i=0;i<12;++i) {
 						var n=itfBytes[bytes[i]];
 						if (n===undefined) {
@@ -241,6 +241,7 @@ self.addEventListener('message', function(e) {
 					if (!ok) {
 						continue;
 					}
+					result.success=true;
 					result.value=bytes.join('');
 					// }
 					return self.postMessage(result);
@@ -309,7 +310,8 @@ self.addEventListener('message', function(e) {
 						'ABABBA': 8,
 						'ABBABA': 9
 					};
-					var digits=[], ok=1, parityPattern='';
+					var digits=[], parityPattern='';
+					ok=1;
 					for (i=0;i<6;++i) { // check left side digits first
 						for (j=0;j<10;++j) {
 							if (eanDigits[j][0]==lbytes[i]) {

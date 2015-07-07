@@ -43,18 +43,59 @@ self.addEventListener('message', function(e) {
 		'success':0
 	};
 	function calibrateGray(lBound, rBound) {
-		var sum=0;
-		for (var i=lBound; i<rBound; ++i) {
-			sum+=this_pixels[i];
+		var histogram=[0], total=rBound-lBound+1, col;
+		for (var i=lBound; i<=rBound; ++i) {
+			col=this_pixels[i];
+			if (!histogram[col]) {
+				histogram[col]=0;
+			}
+			histogram[col]++;
 		}
-		this_avgGray=sum/(rBound-lBound);
+		// use Otsu's algorithm to figure out threshold (average gray) ()
+		var sum = 0;
+		for (var i = 1; i < 256; ++i) {
+			if (!histogram[i]) {
+				histogram[i]=0;
+			}
+			sum += i * histogram[i];
+		}
+		var sumB = 0;
+		var wB = 0;
+		var wF = 0;
+		var mB;
+		var mF;
+		var max = 0.0;
+		var between = 0.0;
+		var threshold1 = 0.0;
+		var threshold2 = 0.0;
+		for (var i = 0; i < 256; ++i) {
+			wB += histogram[i];
+			if (wB == 0) {
+				continue;
+			}
+			wF = total - wB;
+			if (wF == 0) {
+				break;
+			}
+			sumB += i * histogram[i];
+			mB = sumB / wB;
+			mF = (sum - sumB) / wF;
+			between = wB * wF * (mB - mF) * (mB - mF);
+			if ( between >= max ) {
+				threshold1 = i;
+				if ( between > max ) {
+					threshold2 = i;
+				}
+				max = between;				
+			}
+		}
+		this_avgGray=( threshold1 + threshold2 ) / 2.0;
 	}
 	function getBytes(lBound, rBound, log) {
 		lBound=Math.floor(lBound);
 		rBound=Math.ceil(rBound);
 		var width=rBound-lBound+1, byteWidth=width/6, bitWidth=width/42;
 		// first, find a better average gray value for this section
-		calibrateGray(lBound, rBound);
 		var bytes=[];
 		for (var i=0;i<6;++i) {
 			var b='';
@@ -77,7 +118,6 @@ self.addEventListener('message', function(e) {
 		result.quietSize=this_quietSize;
 		// starting from the center of the image, check left until we find this_quietSize repeated "low" bits (the "quiet area")
 		for (var lStart=this_center;lStart>=0;--lStart) {
-			calibrateGray(lStart, lStart+95);
 			// at each start position, check this_quietSize bits and see if they are all low
 			var allLow=1;
 			for (i=lStart;i<this_quietSize*bitsize+lStart;++i) {
@@ -107,7 +147,6 @@ self.addEventListener('message', function(e) {
 			var bcStart=i;
 			result.bcStart=bcStart;
 			for (var rStart=minRStart;rStart<maxRStart;++rStart) {
-				calibrateGray(lStart, lStart+95);
 				// set the boundaries of the expected barcode
 				var bcWidth=rStart-bcStart, bcBitSize=bcWidth/95;
 				// at each rStart position, check this_quietSize bits and see if they are all low
@@ -131,7 +170,6 @@ self.addEventListener('message', function(e) {
 				// and now we can check for the "markers"
 				// if anything at all is wrong from this point forward, then we don't bother checking again at this bit size
 				// first, recalibrate the average gray value
-				calibrateGray(bcStart, rStart);
 				var barcodeType='';
 				// { check for start marker
 				if (!this_getBit(bcStart, bcBitSize) ||
@@ -149,14 +187,33 @@ self.addEventListener('message', function(e) {
 					this_getBit(rGuardStart+bcBitSize, bcBitSize) ||
 					!this_getBit(rGuardStart+bcBitSize*2, bcBitSize)
 				) {
-					break;
+					rGuardStart++;
+					if (!this_getBit(rGuardStart, bcBitSize) ||
+						this_getBit(rGuardStart+bcBitSize, bcBitSize) ||
+						!this_getBit(rGuardStart+bcBitSize*2, bcBitSize)
+					) {
+						rGuardStart--;
+						bcBitSize=bcWidth/108;
+						rGuardStart=parseInt(rStart-bcBitSize*3);
+						if (!this_getBit(rGuardStart, bcBitSize) ||
+							this_getBit(rGuardStart+bcBitSize, bcBitSize) ||
+							!this_getBit(rGuardStart+bcBitSize*2, bcBitSize)
+						) { // no? okay - next...
+							break;
+						}
+					}
+					else {
+						rStart++;
+					}
 				}
 				result.rightMarker=[rGuardStart, rGuardStart+bcBitSize, rGuardStart+bcBitSize*2];
 				result.level=4;
 				// }
 				if (!this_getBit(bcStart+bcBitSize*3, bcBitSize) && this_getBit(rGuardStart-bcBitSize, bcBitSize)) { // probably ITF-14
+					bcBitSize=bcWidth/108;
+					result.bitsize=bcBitSize;
 					result.type='itf';
-					result.lBytesLBound=parseInt(bcStart+3*bcBitSize);
+					result.lBytesLBound=parseInt(bcStart+3.5*bcBitSize);
 					while (this_pixels[result.lBytesLBound]>this_avgGray) {
 						result.lBytesLBound++;
 					}
@@ -164,13 +221,13 @@ self.addEventListener('message', function(e) {
 					while (this_pixels[result.rBytesRBound]<this_avgGray) {
 						result.rBytesRBound--;
 					}
-					calibrateGray(result.lBytesLBound, result.rBytesRBound);
-					result.numbits=14*(2*3+3); // num digits (14) multiplied by (num wide bits (2) by width (2.5) plus num narrow bits)
-					var bits=[], tbitsize=(result.rBytesRBound-result.lBytesLBound)/result.numbits;
-					result.bitsize=tbitsize;
+					result.numbits=12*(2*3+3); // num digits (12) multiplied by (num wide bits (2) by width (2.5) plus num narrow bits)
+					var bits=[], b;
+					result.bitsize=1;
 					var lengths=[], lengthsAt=-1, expectedBit=0;
-					for (var bit=0;bit<result.numbits;++bit) {
-						var b=this_getBit(result.lBytesLBound+bit*tbitsize, tbitsize)?1:0;
+					var w=result.rBytesRBound-result.lBytesLBound;
+					for (var bit=0;bit<w;++bit) {
+						b=this_pixels[result.lBytesLBound+bit]<this_avgGray?1:0;
 						bits.push(b);
 						if (b!=expectedBit) {
 							lengthsAt++;
@@ -181,11 +238,10 @@ self.addEventListener('message', function(e) {
 							lengths[lengthsAt]++;
 						}
 					}
-					console.log(lengthsAt, lengths);
+					result.bits=bits;
 					if (lengthsAt!=59) { // should be (12 digits * 5 bits -1 offset = 59)
 						continue;
 					}
-					result.bits=bits;
 					var bytes=[];
 					for (var i=0;i<6;++i) { // convert lengths into 5-bit bytes
 						for (var j=0;j<2;++j) {
@@ -280,6 +336,7 @@ self.addEventListener('message', function(e) {
 					while (this_pixels[result.rBytesRBound]<this_avgGray) {
 						result.rBytesRBound--;
 					}
+					calibrateGray(result.lBytesLBound, result.rBytesLBound);
 					var lbytes=getBytes(result.lBytesLBound, result.lBytesRBound),
 						rbytes=getBytes(result.rBytesLBound, result.rBytesRBound);
 					result.level=6;
